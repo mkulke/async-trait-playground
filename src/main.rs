@@ -1,20 +1,23 @@
-use axum::{extract::State, routing::get, serve, Router};
+use actix_web::{get, web, App, HttpServer, Responder};
 use frobnicate::{get_frobnicator, Frobnicate};
-use std::sync::Arc;
-use tokio::net::TcpListener;
 
 mod frobnicate;
 
-async fn handler(State(frobnicator): State<Arc<impl Frobnicate>>) -> String {
-    frobnicator.frobnicate().await.into()
+#[get("/")]
+async fn handler(frobnicator: web::Data<impl Frobnicate>) -> impl Responder {
+    let msg = frobnicator.frobnicate().await;
+    String::from(msg)
 }
 
-#[tokio::main]
-async fn main() {
-    let frobnicator = get_frobnicator();
-    let app = Router::new()
-        .route("/", get(handler))
-        .with_state(Arc::new(frobnicator));
-    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    serve(listener, app).await.unwrap();
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(|| {
+        let frobnicator = get_frobnicator();
+        App::new()
+            .service(handler)
+            .app_data(web::Data::new(frobnicator))
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }
